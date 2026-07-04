@@ -55,7 +55,7 @@ powershell -ExecutionPolicy Bypass -File .\run_patch_apk.ps1 .\bhxy2_v13.2.8_bil
 
 - binary `AndroidManifest.xml`에서 `com.combosdk.openapi.ComboApplication`을 `com.combosdk.openapi.ComboAppProxy`로 교체
 - 생성된 payload dex를 원본 APK의 다음 빈 `classesN.dex`로 추가
-  - 국服 원본처럼 `classes4.dex`까지 있으면 `classes5.dex`
+  - 국내 원본처럼 `classes4.dex`까지 있으면 `classes5.dex`
   - bilibili판처럼 `classes6.dex`까지 있으면 `classes7.dex`
 - 생성된 `lib/arm64-v8a/libanimegame_native_localify.so` 추가
 - `-Sign` 옵션 사용 시 `debug.keystore`와 `apksigner.jar`로 서명
