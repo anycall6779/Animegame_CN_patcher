@@ -1,6 +1,6 @@
 # CHINA_PATCH
 
-`Original.StripResource_13.2.8_341_kZm.apk`를 native localify 방식으로 패치하는 도구입니다. 이제 payload를 성공 APK에서 복사하지 않고, 소스에서 생성합니다.
+ native localify 방식으로 패치하는 도구입니다. 이제 payload를 성공 APK에서 복사하지 않고, 소스에서 생성합니다.
 
 ## 구성
 
