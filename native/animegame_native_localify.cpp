@@ -5,8 +5,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <setjmp.h>
-#include <signal.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -62,12 +60,6 @@ std::unordered_map<std::string, std::string> replacement_cache;
 std::mutex apk_path_mutex;
 std::string apk_path;
 std::vector<uint8_t> external_translation_blob;
-thread_local sigjmp_buf scan_fault_jmp;
-thread_local bool scan_fault_guard = false;
-thread_local uintptr_t scan_fault_next = 0;
-struct sigaction old_sigbus_action {};
-struct sigaction old_sigsegv_action {};
-std::once_flag signal_once;
 
 void logi(const char *fmt, ...) {
   va_list args;
@@ -427,38 +419,10 @@ bool should_scan_mapping(const char *perms, const char *path) {
     return false;
   if (path != nullptr && strstr(path, "libanimegame_native_localify.so") != nullptr)
     return false;
-  if (path != nullptr && path[0] == '/')
-    return false;
   return true;
 }
 
-void scan_fault_handler(int signo, siginfo_t *, void *) {
-  if (scan_fault_guard)
-    siglongjmp(scan_fault_jmp, signo);
-
-  const struct sigaction *old_action = signo == SIGBUS ? &old_sigbus_action : &old_sigsegv_action;
-  if (old_action->sa_flags & SA_SIGINFO) {
-    if (old_action->sa_sigaction != nullptr)
-      old_action->sa_sigaction(signo, nullptr, nullptr);
-  } else if (old_action->sa_handler == SIG_DFL) {
-    signal(signo, SIG_DFL);
-    raise(signo);
-  } else if (old_action->sa_handler != SIG_IGN && old_action->sa_handler != nullptr) {
-    old_action->sa_handler(signo);
-  }
-}
-
-void install_scan_fault_handlers() {
-  struct sigaction action {};
-  action.sa_sigaction = scan_fault_handler;
-  sigemptyset(&action.sa_mask);
-  action.sa_flags = SA_SIGINFO | SA_NODEFER;
-  sigaction(SIGBUS, &action, &old_sigbus_action);
-  sigaction(SIGSEGV, &action, &old_sigsegv_action);
-}
-
 size_t patch_pointer_cache(void *original, void *replacement, const char *label) {
-  std::call_once(signal_once, install_scan_fault_handlers);
   FILE *maps = fopen("/proc/self/maps", "r");
   if (maps == nullptr)
     return 0;
@@ -479,31 +443,10 @@ size_t patch_pointer_cache(void *original, void *replacement, const char *label)
     uintptr_t cursor = static_cast<uintptr_t>(start);
     uintptr_t limit = static_cast<uintptr_t>(end);
     for (; cursor + sizeof(void *) <= limit; cursor += sizeof(void *)) {
-      scan_fault_next = (cursor + static_cast<uintptr_t>(getpagesize())) &
-          ~(static_cast<uintptr_t>(getpagesize()) - 1);
-      scan_fault_guard = true;
-      if (sigsetjmp(scan_fault_jmp, 1) != 0) {
-        scan_fault_guard = false;
-        loge("%s skipped unreadable mapping page while scanning icall cache addr=%p",
-            kLogPrefix, reinterpret_cast<void *>(cursor));
-        cursor = scan_fault_next > cursor ? scan_fault_next - sizeof(void *) : cursor;
-        continue;
-      }
       void **slot = reinterpret_cast<void **>(cursor);
-      void *current = *slot;
-      scan_fault_guard = false;
-      if (current != original)
+      if (*slot != original)
         continue;
-      scan_fault_guard = true;
-      if (sigsetjmp(scan_fault_jmp, 1) != 0) {
-        scan_fault_guard = false;
-        loge("%s skipped unwritable mapping page while patching icall cache addr=%p",
-            kLogPrefix, reinterpret_cast<void *>(cursor));
-        cursor = scan_fault_next > cursor ? scan_fault_next - sizeof(void *) : cursor;
-        continue;
-      }
       *slot = replacement;
-      scan_fault_guard = false;
       patched++;
       logi("%s icall-cache-hooked %s slot=%p original=%p replacement=%p",
           kLogPrefix, label, slot, original, replacement);

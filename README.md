@@ -59,7 +59,3 @@ powershell -ExecutionPolicy Bypass -File .\run_patch_apk.ps1 .\bhxy2_v13.2.8_bil
   - bilibili판처럼 `classes6.dex`까지 있으면 `classes7.dex`
 - 생성된 `lib/arm64-v8a/libanimegame_native_localify.so` 추가
 - `-Sign` 옵션 사용 시 `debug.keystore`와 `apksigner.jar`로 서명
-
-## 문제 해결 기록
-
-- Xiaomi/Android 16 실기에서 `UnityMain` SIGBUS가 날 경우, 원인은 native localify의 icall 캐시 스캐너가 읽으면 안 되는 writable 매핑 페이지를 읽는 문제였다. 현재 payload는 SIGBUS/SIGSEGV 보호와 파일 매핑 제외 처리를 포함한다.
